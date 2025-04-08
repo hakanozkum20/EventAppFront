@@ -1,0 +1,432 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Proje Yapısı Kuralları
+
+## Veritabanı Yapısı
+
+### Users Tablosu
+Tablo: users
+- id: UUID (Primary Key)
+- email: VARCHAR
+- password_hash: VARCHAR
+- role: ENUM ('saas_admin', 'company_admin', 'moderator', 'viewer')
+- company_id: UUID (Foreign Key)
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+
+### Companies Tablosu
+Tablo: companies
+- id: UUID (Primary Key)
+- name: VARCHAR
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+
+### Events Tablosu
+Tablo: events
+- id: UUID (Primary Key)
+- company_id: UUID (Foreign Key)
+- event_type: ENUM ('wedding', 'engagement', 'henna')
+- event_date: TIMESTAMP
+- location: VARCHAR
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+
+### Audit Logs Tablosu
+Tablo: audit_logs
+- id: UUID (Primary Key)
+- user_id: UUID (Foreign Key)
+- action: VARCHAR
+- table_name: VARCHAR
+- row_id: UUID
+- created_at: TIMESTAMP
+
+## Kullanıcı Rolleri
+
+- **saas_admin**: Tüm şirketlerin ve kullanıcıların yönetimi.
+  - Tüm verilere erişim.
+  - Yeni kullanıcılar ekleyebilir.
+  - Tüm şirketlerin etkinliklerini görebilir.
+
+- **company_admin**: Şirketlerin yönetimi.
+  - Yalnızca kendi şirketine ait verilere erişebilir.
+  - Şirketin kullanıcılarını yönetebilir.
+  - Etkinlikler oluşturabilir, düzenleyebilir ve silebilir.
+
+- **moderator**: Etkinlik düzenleme yetkisi.
+  - Kendi şirketine ait etkinlikleri listeleyebilir, düzenleyebilir.
+  - Yeni etkinlik ekleyemez veya silemez.
+
+- **viewer**: Görüntüleme yetkisi.
+  - Yalnızca etkinlikleri görüntüleyebilir.
+
+## Kullanıcı Rolleri ve Erişim İzinleri
+
+### Erişim Kuralları
+- **SaaS Admin**: 
+  - `CREATE`, `UPDATE`, `DELETE`, `SELECT` işlemlerini tüm tablolarda gerçekleştirebilir.
+  - Tüm şirketlere, etkinliklere ve audit loglarına erişebilir.
+- **Company Admin**: 
+  - Yalnızca kendi şirketine ait veriler üzerinde işlem yapabilir.
+  - Kendi şirketindeki etkinlikleri oluşturabilir, güncelleyebilir ve silebilir.
+  - Kullanıcı ekleyebilir, ancak yalnızca kendi şirketine.
+- **Moderator**:
+  - Yalnızca kendi şirketine ait etkinlikleri listeleyebilir ve düzenleyebilir.
+  - Yeni etkinlik ekleyemez veya silemez.
+- **Viewer**:
+  - Yalnızca kendi şirketine ait etkinlikleri görüntüleyebilir.
+
+## API Endpoints ve İşlem Akışları
+
+### Kullanıcı Yönetimi
+1. **POST /users**: Yeni kullanıcı ekler.
+   - **Erişim**: `saas_admin`, `company_admin`
+   - **Veri**: `email`, `password`, `role`, `company_id`
+2. **GET /users/{user_id}**: Kullanıcı bilgilerini görüntüler.
+   - **Erişim**: `saas_admin`, `company_admin`, `moderator`
+3. **PUT /users/{user_id}**: Kullanıcı bilgilerini günceller.
+   - **Erişim**: `saas_admin`, `company_admin`
+   - **Veri**: `role`, `email`
+4. **DELETE /users/{user_id}**: Kullanıcıyı siler.
+   - **Erişim**: `saas_admin`, `company_admin`
+5. **GET /users** 
+   - **Erişim**: `saas_admin`, `company_admin`, `moderator`
+
+
+### Etkinlik Yönetimi
+1. **POST /events**: Yeni etkinlik oluşturur.
+   - **Erişim**: `company_admin`
+   - **Veri**: `company_id`, `event_type`, `event_date`, `location`
+2. **GET /events**: Etkinlikleri listeler.
+   - **Erişim**: `company_admin`, `moderator`, `viewer`
+3. **PUT /events/{event_id}**: Etkinlik bilgilerini günceller.
+   - **Erişim**: `company_admin`, `moderator`
+   - **Veri**: `event_date`, `location`
+4. **DELETE /events/{event_id}**: Etkinliği siler.
+   - **Erişim**: `company_admin`
+
+### Audit Log Yönetimi
+1. **GET /audit-logs**: Audit loglarını görüntüler.
+   - **Erişim**: `saas_admin`, `company_admin`
+   - **Veri**: `user_id`, `action`, `table_name`, `created_at`
+
+## Row-Level Security (RLS) Kuralları
+- **Şirket Yönetimi**: 
+  - Şirketlerin verileri yalnızca ilgili `company_id` ile eşleşen kullanıcılar tarafından görüntülenebilir.
+- **Etkinlik Yönetimi**: 
+  - Etkinlikler yalnızca ilgili `company_id` ile eşleşen kullanıcılar tarafından görüntülenebilir ve düzenlenebilir.
+  - `moderator` yalnızca etkinlikleri güncelleyebilir, yeni etkinlik ekleyemez.
+
+## Güvenlik ve Kimlik Doğrulama
+
+    Supabase Client + Prisma Schema/Migrations
+
+Veritabanı şemasını ve migrasyonları Prisma ile yönetme
+Sorguları Supabase Client üzerinden yapma (RLS kurallarını otomatik uygular)
+JWT token'larını Supabase'in sağladığı mekanizma ile yönetme
+
+
+- **Authentication**: Kullanıcı doğrulaması **Supabase Auth** ile yapılır. Kullanıcılar yalnızca admin (saas_admin, company_admin)  tarafından eklenebilir. 
+- **Authorization**: JWT token kullanarak, kullanıcının rolüne göre veri erişimi sağlanır.
+- **Role-Based Security** (RLS): Her kullanıcının yalnızca kendi yetkileriyle ilişkili verilere erişmesi sağlanır.
+Kullanıcılar kendı profıl sayfalarını goruntuleyıp sıfrelerını degıstırme yetkısıne sahıp olacaklar
+
+## Deployment ve CI/CD
+
+### Deployment Platformları
+- **Frontend**: Vercel
+- **Backend**: Supabase
+- **CI/CD**: GitHub Actions
+
+## Test Senaryoları
+
+### Kullanıcı Erişimi Testi
+1. **SaaS Admin**: Tüm verileri erişebilir.
+2. **Company Admin**: Yalnızca kendi şirketinin verilerine erişebilir.
+3. **Moderator**: Yalnızca etkinlikleri lısteleyıp güncelleyebilir.
+4. **Viewer**: Yalnızca etkinlikleri görüntüleyebilir.
+
+### Etkinlik Yönetimi Testi
+1. **Company Admin**: Etkinlik oluşturma, güncelleme ve silme işlemleri yapılabilir.
+2. **Moderator**: Etkinlikleri güncelleyebilir, ancak ekleme ve silme işlemleri yapamaz.
+
+
+ornek lıb/supabase.ts dosyası 
+
+// lib/supabase.ts
+import { createClient } from '@supabase/supabase-js';
+import { Database } from '@/types/supabase';
+
+// Supabase client kurulumu
+export const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+// JWT içeriğini özelleştirmek için JWT hook'u
+export const setupSupabaseJwtHook = async () => {
+  // Bu kod Supabase Edge Functions'da çalıştırılacak
+  // Kullanıcı giriş yaptığında JWT içeriğine rol ve şirket ID'sini ekliyoruz
+  
+  // hooks/auth-user-created.ts Edge Function
+  /*
+  import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+  serve(async (req) => {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+    
+    const { user } = await req.json()
+    
+    // User tablosundan kullanıcı bilgisini al
+    const { data, error } = await supabaseClient
+      .from('User')
+      .select('role, companyId')
+      .eq('id', user.id)
+      .single()
+    
+    if (error) {
+      console.error('Error fetching user data:', error)
+      return new Response(JSON.stringify({ error: error.message }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 400,
+      })
+    }
+    
+    // JWT claim'lerini güncelle
+    await supabaseClient.auth.admin.updateUserById(
+      user.id,
+      {
+        app_metadata: {
+          role: data.role,
+          companyId: data.companyId,
+        },
+      }
+    )
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200,
+    })
+  })
+  */
+};
+
+// Kullanıcı rolleri için tip tanımlamaları
+export type UserRole = 'SUPER_ADMIN' | 'COMPANY_ADMIN' | 'MODERATOR' | 'VIEWER';
+
+// Kullanıcının rolüne göre izinlerini kontrol etme
+export const checkPermission = (
+  userRole: UserRole,
+  requiredRole: UserRole | UserRole[]
+): boolean => {
+  const roleHierarchy: Record<UserRole, number> = {
+    'SUPER_ADMIN': 3,
+    'COMPANY_ADMIN': 2,
+    'MODERATOR': 1,
+    'VIEWER': 0
+  };
+
+  if (Array.isArray(requiredRole)) {
+    return requiredRole.some(role => roleHierarchy[userRole] >= roleHierarchy[role]);
+  }
+  
+  return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
+};
+
+
+
+
+
+Proje agacı şu şekılde dızayn edebılırsın
+
+```
+/src
+  /app
+    /api              # Next.js API yolları
+      /auth
+        /route.ts     # Auth ile ilgili API routes
+      /users
+        /route.ts     # Kullanıcı işlemleri
+      /companies
+        /route.ts     # Şirket işlemleri
+      /events
+        /route.ts     # Etkinlik işlemleri
+      /financials
+        /route.ts     # Finansal işlemler
+    /(auth)           # Auth sayfaları (giriş sayfası vb.)
+      /login
+        /page.tsx
+      /layout.tsx
+    /(authenticated)   # Oturum açmış kullanıcılara özel layout
+      /layout.tsx      # Auth kontrolü ve yönlendirme
+      /dashboard        
+        /page.tsx      # Dashboard ana sayfa
+      /events
+        /page.tsx      # Etkinlik listesi
+        /[id]
+          /page.tsx    # Etkinlik detayı
+        /create
+          /page.tsx    # Etkinlik oluşturma
+      /companies
+        /page.tsx
+        /[id]
+          /page.tsx
+        /create
+          /page.tsx
+      /users
+        /page.tsx
+        /[id]
+          /page.tsx
+        /create
+          /page.tsx
+      /financials
+        /page.tsx
+      /settings
+        /page.tsx
+      /audit-logs
+        /page.tsx
+    /layout.tsx        # Root layout
+
+  /components          # Yeniden kullanılabilir bileşenler
+    /ui                # ShadCN UI bileşenleri
+    /forms             # Form bileşenleri
+      /events
+      /users
+      /companies
+    /data-tables       # Tablo bileşenleri
+    /dashboard         # Dashboard bileşenleri
+    /layouts           # Layout bileşenleri
+    /modals            # Modal bileşenleri
+
+  /lib                 # Yardımcı fonksiyonlar ve hooks
+    /supabase.ts       # Supabase client
+    /prisma.ts         # Prisma client
+    /auth.ts           # Auth yardımcıları
+    /utils.ts          # Genel yardımcı fonksiyonlar
+
+  /hooks               # Custom React hooks
+    /useAuth.ts
+    /useCompanies.ts
+    /useEvents.ts
+    /useFinancials.ts
+    /useUsers.ts
+    /useAuditLogs.ts
+
+  /types               # TypeScript tip tanımlamaları
+    /supabase.ts       # Supabase tipleri
+    /index.ts          # Genel tipler
+
+  /providers           # Context providers
+    /AuthProvider.tsx
+    /ThemeProvider.tsx
+
+  /middleware.ts       # Next.js middleware (auth kontrolü)
+
+/prisma
+  /schema.prisma       # Prisma şeması
+  /migrations          # Migrations
+
+/public               # Statik dosyalar
+  /images
+
+/.env.local           # Ortam değişkenleri
+/next.config.js       # Next.js yapılandırması
+/tailwind.config.js   # Tailwind yapılandırması
+/package.json         # Bağımlılıklar
+```
+
+
+
+
+Mıddleware dosyasının ornegı 
+
+// middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+  const supabase = createMiddlewareClient({ req, res });
+  
+  // Kullanıcı oturumunu kontrol et
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  // URL'yi kontrol et
+  const { pathname } = req.nextUrl;
+  
+  // Auth olmayan sayfalar için geçiş izni ver
+  if (pathname.startsWith('/_next') || 
+      pathname.startsWith('/api/auth') ||
+      pathname === '/login' ||
+      pathname === '/favicon.ico') {
+    return res;
+  }
+  
+  // Oturum yoksa login sayfasına yönlendir
+  if (!session && pathname !== '/login') {
+    const redirectUrl = req.nextUrl.clone();
+    redirectUrl.pathname = '/login';
+    redirectUrl.searchParams.set('redirectedFrom', pathname);
+    return NextResponse.redirect(redirectUrl);
+  }
+  
+  // Oturum varsa ancak login sayfasındaysa, dashboard'a yönlendir
+  if (session && pathname === '/login') {
+    const redirectUrl = req.nextUrl.clone();
+    redirectUrl.pathname = '/dashboard';
+    return NextResponse.redirect(redirectUrl);
+  }
+  
+  // Rol tabanlı erişim kontrolü (bazı örnekler)
+  if (session) {
+    const userRole = session.user.app_metadata.role;
+    const companyId = session.user.app_metadata.companyId;
+    
+    // Sadece SUPER_ADMIN'lerin erişebileceği sayfalar
+    if (pathname.startsWith('/companies/create') && userRole !== 'SUPER_ADMIN') {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = '/dashboard';
+      return NextResponse.redirect(redirectUrl);
+    }
+    
+    // Sadece SUPER_ADMIN ve COMPANY_ADMIN'lerin erişebileceği sayfalar
+    if (pathname.startsWith('/users/create') && 
+        userRole !== 'SUPER_ADMIN' && 
+        userRole !== 'COMPANY_ADMIN') {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = '/dashboard';
+      return NextResponse.redirect(redirectUrl);
+    }
+    
+    // URL'deki şirket ID'si kullanıcının şirket ID'si ile eşleşiyor mu?
+    if (pathname.includes('/companies/') && userRole !== 'SUPER_ADMIN') {
+      const urlCompanyId = pathname.split('/')[2];
+      if (urlCompanyId && urlCompanyId !== companyId) {
+        const redirectUrl = req.nextUrl.clone();
+        redirectUrl.pathname = '/dashboard';
+        return NextResponse.redirect(redirectUrl);
+      }
+    }
+  }
+  
+  return res;
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};
+
+
+
