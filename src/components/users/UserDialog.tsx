@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { toast } from 'sonner'
 import {
   Select,
   SelectContent,
@@ -30,9 +31,11 @@ interface UserDialogProps {
   onOpenChange: (open: boolean) => void
   onClose: () => void
   user: User | null
+  onUserCreated?: () => void // Yeni kullanıcı oluşturulduğunda çağrılacak fonksiyon
+  onUserUpdated?: () => void // Kullanıcı güncellendiğinde çağrılacak fonksiyon
 }
 
-export function UserDialog({ open, onOpenChange, onClose, user }: UserDialogProps) {
+export function UserDialog({ open, onOpenChange, onClose, user, onUserCreated, onUserUpdated }: UserDialogProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState<UserCreateInput>({
@@ -102,6 +105,22 @@ export function UserDialog({ open, onOpenChange, onClose, user }: UserDialogProp
 
         if (response.error) {
           throw new Error(response.error)
+        } else {
+          // Promise toast kullan
+          toast.promise(
+            // 1 saniye gecikme ekle
+            new Promise(resolve => setTimeout(resolve, 1000)),
+            {
+              loading: 'Kullanıcı güncelleniyor...',
+              success: 'Başarılı! Kullanıcı başarıyla güncellendi.',
+              error: 'Bir hata oluştu.'
+            }
+          )
+
+          // Kullanıcı güncellendiğinde callback'i çağır
+          if (onUserUpdated) {
+            onUserUpdated()
+          }
         }
       } else {
         // Create new user
@@ -114,6 +133,22 @@ export function UserDialog({ open, onOpenChange, onClose, user }: UserDialogProp
 
         if (response.error) {
           throw new Error(response.error)
+        } else {
+          // Promise toast kullan
+          toast.promise(
+            // 1 saniye gecikme ekle
+            new Promise(resolve => setTimeout(resolve, 1000)),
+            {
+              loading: 'Yeni kullanıcı oluşturuluyor...',
+              success: 'Başarılı! Kullanıcı başarıyla oluşturuldu.',
+              error: 'Bir hata oluştu.'
+            }
+          )
+
+          // Yeni kullanıcı oluşturulduğunda callback'i çağır
+          if (onUserCreated) {
+            onUserCreated()
+          }
         }
       }
 

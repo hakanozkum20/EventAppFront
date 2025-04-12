@@ -13,11 +13,12 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
+import { Toaster } from '@/components/ui/sonner'
 import { UserDialog } from '@/components/users/UserDialog'
 // Geçici olarak auth kontekstini devre dışı bırakıyoruz
 // // Geçici olarak auth kontekstini devre dışı bırakıyoruz
 // import { useAuth } from '@/contexts/auth-context'
-import { getUsers } from '@/services/api'
+import userService from '@/services/user-service'
 
 export default function UsersClient() {
   const [users, setUsers] = useState<User[]>([])
@@ -52,7 +53,7 @@ export default function UsersClient() {
       setIsLoading(true)
       setError(null)
 
-      const response = await getUsers()
+      const response = await userService.getAll()
 
       if (response.error) {
         throw new Error(response.error)
@@ -82,7 +83,7 @@ export default function UsersClient() {
   const handleDialogClose = () => {
     setIsDialogOpen(false)
     setSelectedUser(null)
-    fetchUsers()
+    // fetchUsers() // Artık burada fetchUsers'i çağırmıyoruz, onUserCreated ve onUserUpdated callback'leri kullanıyoruz
   }
 
   if (!currentUser) return null
@@ -143,7 +144,11 @@ export default function UsersClient() {
         onOpenChange={setIsDialogOpen}
         onClose={handleDialogClose}
         user={selectedUser}
+        onUserCreated={fetchUsers} // Yeni kullanıcı oluşturulduğunda kullanıcıları yeniden yükle
+        onUserUpdated={fetchUsers} // Kullanıcı güncellendiğinde kullanıcıları yeniden yükle
       />
+
+      <Toaster />
     </div>
   )
 }

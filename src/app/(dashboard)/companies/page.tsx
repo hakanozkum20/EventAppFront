@@ -8,6 +8,8 @@ import { CompanyDialog } from './company-dialog'
 import { Company } from '@/services/company-service'
 import companyService from '@/services/company-service'
 import { toast } from 'sonner'
+import { Toaster } from '@/components/ui/sonner'
+import { PaginatedResponse } from '@/types/pagination'
 
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([])
@@ -15,13 +17,24 @@ export default function CompaniesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [totalCount, setTotalCount] = useState(0)
+  const [pageCount, setPageCount] = useState(0)
+
   // Şirketleri yükle
   const loadCompanies = async () => {
     setLoading(true)
     try {
-      const response = await companyService.getAll()
+      // Pagination parametreleri ile şirketleri getir
+      const response = await companyService.getPaginated({ page: currentPage, size: pageSize })
+
       if (response.data) {
-        setCompanies(response.data)
+        // Pagination bilgilerini güncelle
+        setCompanies(response.data.items)
+        setTotalCount(response.data.totalCount)
+        setPageCount(response.data.pageCount)
       } else if (response.error) {
         toast.error('Hata', {
           description: response.error
@@ -36,10 +49,10 @@ export default function CompaniesPage() {
     }
   }
 
-  // Sayfa yüklendiğinde şirketleri getir
+  // Sayfa, sayfa numarası veya sayfa boyutu değiştiğinde şirketleri getir
   useEffect(() => {
     loadCompanies()
-  }, [])
+  }, [currentPage, pageSize])
 
   // Şirket düzenleme işlemi
   const handleEdit = (company: Company) => {
@@ -72,7 +85,7 @@ export default function CompaniesPage() {
   const handleDialogClose = () => {
     setSelectedCompany(null)
     setDialogOpen(false)
-    loadCompanies()
+    // loadCompanies()
   }
 
   return (
@@ -90,14 +103,34 @@ export default function CompaniesPage() {
         loading={loading}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        // Pagination props
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        pageCount={pageCount}
+        onPageChange={(page) => setCurrentPage(page)}
+        onPageSizeChange={(size) => {
+          setPageSize(size)
+          setCurrentPage(1) // Sayfa boyutu değiştiğinde ilk sayfaya dön
+        }}
       />
 
       <CompanyDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) {
+            // Dialog kapandığında handleDialogClose fonksiyonunu çağır
+            handleDialogClose()
+          }
+        }}
         onClose={handleDialogClose}
         company={selectedCompany}
+        onCompanyCreated={loadCompanies} // Yeni şirket oluşturulduğunda şirketleri yeniden yükle
+        onCompanyUpdated={loadCompanies} // Şirket güncellendiğinde şirketleri yeniden yükle
       />
+
+      <Toaster />
     </div>
   )
 }

@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {children}
           </div>
         </main>
-        <Toaster />
+        <Toaster richColors expand={true}/>
       </div>
     </div>
   )

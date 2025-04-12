@@ -50,17 +50,54 @@ interface CompaniesTableProps {
   loading: boolean
   onEdit: (company: Company) => void
   onDelete: (company: Company) => void
+  // Pagination props
+  currentPage?: number
+  pageSize?: number
+  totalCount?: number
+  pageCount?: number
+  onPageChange?: (page: number) => void
+  onPageSizeChange?: (pageSize: number) => void
 }
 
-export function CompaniesTable({ companies, loading, onEdit, onDelete }: CompaniesTableProps) {
+export function CompaniesTable({
+  companies,
+  loading,
+  onEdit,
+  onDelete,
+  currentPage = 1,
+  pageSize = 10,
+  totalCount = 0,
+  pageCount = 0,
+  onPageChange,
+  onPageSizeChange
+}: CompaniesTableProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [pagination, setPagination] = useState({
-    pageIndex: 0,
-    pageSize: 10,
-  })
+  // Yerel pagination state'i yerine prop'ları kullan
+  const pagination = {
+    pageIndex: currentPage - 1, // 0-indexed
+    pageSize: pageSize,
+  }
+
+  // Pagination değişikliğini işle
+  const handlePaginationChange = (updaterOrValue: any) => {
+    // Updater bir fonksiyon olabilir veya doğrudan bir değer olabilir
+    const newPagination = typeof updaterOrValue === 'function'
+      ? updaterOrValue(pagination)
+      : updaterOrValue
+
+    // Sayfa değiştiğinde onPageChange callback'ini çağır
+    if (newPagination.pageIndex !== pagination.pageIndex && onPageChange) {
+      onPageChange(newPagination.pageIndex + 1) // 1-indexed
+    }
+
+    // Sayfa boyutu değiştiğinde onPageSizeChange callback'ini çağır
+    if (newPagination.pageSize !== pagination.pageSize && onPageSizeChange) {
+      onPageSizeChange(newPagination.pageSize)
+    }
+  }
 
   // Silme işlemi için onay
   const handleDeleteClick = (company: Company) => {
@@ -148,7 +185,7 @@ export function CompaniesTable({ companies, loading, onEdit, onDelete }: Compani
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
-    onPaginationChange: setPagination,
+    onPaginationChange: handlePaginationChange,
     state: {
       sorting,
       columnFilters,
@@ -220,11 +257,11 @@ export function CompaniesTable({ companies, loading, onEdit, onDelete }: Compani
 
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} kayıttan{' '}
-          {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}-
+          {totalCount} kayıttan{' '}
+          {currentPage * pageSize - pageSize + 1}-
           {Math.min(
-            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            table.getFilteredRowModel().rows.length
+            currentPage * pageSize,
+            totalCount
           )}{' '}
           arası gösteriliyor.
         </div>
@@ -232,9 +269,9 @@ export function CompaniesTable({ companies, loading, onEdit, onDelete }: Compani
           <div className="flex items-center space-x-2">
             <p className="text-sm font-medium">Sayfa başına</p>
             <select
-              value={table.getState().pagination.pageSize}
+              value={pageSize}
               onChange={(e) => {
-                table.setPageSize(Number(e.target.value))
+                onPageSizeChange && onPageSizeChange(Number(e.target.value))
               }}
               className="h-8 w-[70px] rounded-md border border-input bg-transparent px-2 py-1"
             >
@@ -249,20 +286,17 @@ export function CompaniesTable({ companies, loading, onEdit, onDelete }: Compani
             <PaginationContent>
               <PaginationItem>
                 <PaginationPrevious
-                  onClick={() => table.previousPage()}
-                  className={!table.getCanPreviousPage() ? 'pointer-events-none opacity-50' : ''}
+                  onClick={() => onPageChange && onPageChange(currentPage - 1)}
+                  className={currentPage <= 1 ? 'pointer-events-none opacity-50' : ''}
                 />
               </PaginationItem>
-              {Array.from({ length: table.getPageCount() }, (_, i) => i + 1)
+              {Array.from({ length: pageCount }, (_, i) => i + 1)
                 .filter(page => {
-                  const currentPage = table.getState().pagination.pageIndex + 1;
                   return page === 1 ||
-                         page === table.getPageCount() ||
+                         page === pageCount ||
                          Math.abs(page - currentPage) <= 1;
                 })
                 .map((page, i, array) => {
-                  const currentPage = table.getState().pagination.pageIndex + 1;
-
                   // Add ellipsis
                   if (i > 0 && array[i - 1] !== page - 1) {
                     return (
@@ -276,7 +310,7 @@ export function CompaniesTable({ companies, loading, onEdit, onDelete }: Compani
                     <PaginationItem key={page}>
                       <PaginationLink
                         isActive={currentPage === page}
-                        onClick={() => table.setPageIndex(page - 1)}
+                        onClick={() => onPageChange && onPageChange(page)}
                       >
                         {page}
                       </PaginationLink>
@@ -285,8 +319,8 @@ export function CompaniesTable({ companies, loading, onEdit, onDelete }: Compani
                 })}
               <PaginationItem>
                 <PaginationNext
-                  onClick={() => table.nextPage()}
-                  className={!table.getCanNextPage() ? 'pointer-events-none opacity-50' : ''}
+                  onClick={() => onPageChange && onPageChange(currentPage + 1)}
+                  className={currentPage >= pageCount ? 'pointer-events-none opacity-50' : ''}
                 />
               </PaginationItem>
             </PaginationContent>

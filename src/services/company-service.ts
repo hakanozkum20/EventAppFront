@@ -1,6 +1,7 @@
 'use client'
 
-import { createApiService } from '@/lib/http';
+import { createApiService, ApiResponse } from '@/lib/http';
+import { PaginatedResponse, PaginationParams } from '@/types/pagination';
 
 // Şirket tipi tanımlama
 export interface Company {
@@ -36,6 +37,37 @@ const extendedCompanyService = {
   create: companyService.create.bind(companyService),
   update: companyService.update.bind(companyService),
   delete: companyService.delete.bind(companyService),
+
+  // Sayfalama ile şirketleri getir
+  async getPaginated(params: PaginationParams): Promise<ApiResponse<PaginatedResponse<Company>>> {
+    const queryParams = {
+      page: params.page.toString(),
+      size: params.size.toString()
+    };
+    // API'den gelen yanıtı PaginatedResponse tipine dönüştür
+    const response = await companyService.getByAction('paginated', queryParams);
+
+    // Tip dönüşümü için kontrol
+    if (response.data) {
+      // API'den gelen yanıtın PaginatedResponse formatında olduğunu varsayıyoruz
+      // Eğer API'den gelen yanıt farklı bir formatta ise, burada dönüştürme işlemi yapılabilir
+      return response as unknown as ApiResponse<PaginatedResponse<Company>>;
+    }
+
+    // Hata durumunda boş bir PaginatedResponse döndür
+    return {
+      error: response.error,
+      data: {
+        items: [],
+        totalCount: 0,
+        pageCount: 0,
+        currentPage: params.page,
+        pageSize: params.size,
+        hasPreviousPage: false,
+        hasNextPage: false
+      }
+    };
+  },
 
   // Aktif şirketleri getir
   async getActiveCompanies() {

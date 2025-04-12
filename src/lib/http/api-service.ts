@@ -16,21 +16,32 @@ export class ApiService<T, CreateDto = T, UpdateDto = Partial<T>> {
     this.controller = controller;
   }
 
-  private getToken(): string | undefined {
-    return typeof window !== 'undefined' ? localStorage.getItem('auth_token') || undefined : undefined;
-  }
+  // Token almak için yardımcı metod
+  // Şu anda kullanılmıyor, ama ileride gerekebilir
+  // private getToken(): string | undefined {
+  //   return typeof window !== 'undefined' ? localStorage.getItem('auth_token') || undefined : undefined;
+  // }
 
-  private checkAuth<R>(): ApiResponse<R> | null {
-    const token = this.getToken();
-    if (!token) {
-      return { error: 'Not authenticated' };
-    }
-    return null;
-  }
+  // Token kontrolü için yardımcı metod
+  // Şu anda kullanılmıyor, ama ileride gerekebilir
+  // private checkAuth<R>(): ApiResponse<R> | null {
+  //   const token = this.getToken();
+  //   if (!token) {
+  //     return { error: 'Not authenticated' };
+  //   }
+  //   return null;
+  // }
 
   private handleError(error: any): ApiResponse<any> {
+    // Hata mesajını al
+    const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+
+    // Hata kodunu kontrol et (varsa)
+    const statusCode = error.statusCode || error.status || undefined;
+
     return {
-      error: error instanceof Error ? error.message : 'An error occurred'
+      error: errorMessage,
+      statusCode
     };
   }
 
@@ -55,7 +66,6 @@ export class ApiService<T, CreateDto = T, UpdateDto = Partial<T>> {
     action?: string,
     id?: string | number,
     data?: any,
-    requiresAuth: boolean = true,
     params?: Record<string, string>
   ): Promise<ApiResponse<R>> {
     try {
@@ -88,7 +98,7 @@ export class ApiService<T, CreateDto = T, UpdateDto = Partial<T>> {
 
   // CRUD operations
   async getAll(params?: Record<string, string>): Promise<ApiResponse<T[]>> {
-    return this.makeRequest<T[]>('GET', undefined, undefined, undefined, true, params);
+    return this.makeRequest<T[]>('GET', undefined, undefined, undefined, params);
   }
 
   async getById(id: string | number): Promise<ApiResponse<T>> {
@@ -109,11 +119,11 @@ export class ApiService<T, CreateDto = T, UpdateDto = Partial<T>> {
 
   // Custom action methods
   async getByAction(action: string, params?: Record<string, string>): Promise<ApiResponse<T[]>> {
-    return this.makeRequest<T[]>('GET', action, undefined, undefined, true, params);
+    return this.makeRequest<T[]>('GET', action, undefined, undefined, params);
   }
 
   async getByIdAndAction(id: string | number, action: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>('GET', action, id, undefined, true, params);
+    return this.makeRequest<T>('GET', action, id, undefined, params);
   }
 
   async postToAction(action: string, data: any): Promise<ApiResponse<any>> {
@@ -126,11 +136,11 @@ export class ApiService<T, CreateDto = T, UpdateDto = Partial<T>> {
 
   // Public methods
   async publicGet(action: string, params?: Record<string, string>): Promise<ApiResponse<any>> {
-    return this.makeRequest<any>('GET', action, undefined, undefined, false, params);
+    return this.makeRequest<any>('GET', action, undefined, undefined, params);
   }
 
   async publicPost(action: string, data: any): Promise<ApiResponse<any>> {
-    return this.makeRequest<any>('POST', action, undefined, data, false);
+    return this.makeRequest<any>('POST', action, undefined, data);
   }
 }
 

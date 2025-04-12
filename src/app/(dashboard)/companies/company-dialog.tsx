@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import * as z from "zod"
 import {
   Dialog,
   DialogContent,
@@ -9,63 +12,91 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-// import { Textarea } from '@/components/ui/textarea' // Kullanılmıyor
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
 import { Company } from '@/services/company-service'
 import companyService from '@/services/company-service'
 import { toast } from 'sonner'
 // Geçici olarak auth kontekstini devre dışı bırakıyoruz
 // import { useAuth } from '@/contexts/auth-context'
 
+// Form şeması
+const formSchema = z.object({
+  name: z.string().min(2, {
+    message: "Şirket adı en az 2 karakter olmalıdır.",
+  }),
+  customerId: z.string().optional(),
+  isActive: z.boolean().default(true),
+})
+
+// Form tipi - z.infer<typeof formSchema> kullanıyoruz
+
 interface CompanyDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onClose: () => void
   company: Company | null
+  onCompanyCreated?: () => void // Yeni şirket oluşturulduğunda çağrılacak fonksiyon
+  onCompanyUpdated?: () => void // Şirket güncellendiğinde çağrılacak fonksiyon
 }
 
-export function CompanyDialog({ open, onOpenChange, onClose, company }: CompanyDialogProps) {
-  const [loading, setLoading] = useState(false)
+export function CompanyDialog({ open, onOpenChange, onClose, company, onCompanyCreated, onCompanyUpdated }: CompanyDialogProps) {
   const [error, setError] = useState<string | null>(null)
-  // Company tipini kullanarak form verilerini yönetiyoruz
-  // Backend'e gönderirken sadece gerekli alanları seçeceğiz
-  const [formData, setFormData] = useState({
-    name: '',
-    customerId: '',
-    isActive: true // Frontend'de göstermek için kullanıyoruz
-  })
   // Geçici olarak auth kontrolünü devre dışı bırakıyoruz
   // const { user } = useAuth()
   const user = { role: 'SAAS_ADMIN' } // Geçici olarak admin rolü veriyoruz
 
+  // Form tanımı
+  const form = useForm({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: '',
+      customerId: '',
+      isActive: true
+    }
+  })
+
+  // Form gönderme işlemi
+  function onSubmit(values: any) {
+    handleFormSubmit(values)
+  }
+
+  // Dialog açıldığında form verilerini güncelle
   useEffect(() => {
     if (company) {
-      setFormData({
+      form.reset({
         name: company.name,
         customerId: company.customerId || '',
         isActive: company.isActive
       })
     } else {
-      setFormData({
+      form.reset({
         name: '',
         customerId: '',
         isActive: true
       })
     }
-  }, [company])
+  }, [company, form])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  // Dialog kapandığında hata durumunu sıfırla
+  useEffect(() => {
+    if (!open) {
+      setError(null)
+    }
+  }, [open])
+
+  const handleFormSubmit = async (values: any) => {
     setError(null)
 
     try {
-      // Form doğrulaması
-      if (!formData.name || formData.name.trim() === '') {
-        throw new Error('Şirket adı boş olamaz')
-      }
-
       if (!user) {
         throw new Error('Oturum açmanız gerekiyor')
       }
@@ -80,9 +111,9 @@ export function CompanyDialog({ open, onOpenChange, onClose, company }: CompanyD
         // Backend'e sadece gerekli alanları gönderiyoruz
         // Backend'in beklediği format: { name: string, customerId: Guid | null }
         const updateData = {
-          name: formData.name.trim(), // Boşlukları temizle
+          name: values.name.trim(), // Boşlukları temizle
           // Boş string yerine null gönderiyoruz
-          customerId: formData.customerId && formData.customerId.trim() !== '' ? formData.customerId : null
+          customerId: values.customerId && values.customerId.trim() !== '' ? values.customerId : null
         }
 
         // Hata ayıklama için verileri konsola yazdır
@@ -91,20 +122,28 @@ export function CompanyDialog({ open, onOpenChange, onClose, company }: CompanyD
         const response = await companyService.update(company.id, updateData)
 
         if (response.error) {
-          throw new Error(response.error)
+          setError(response.error)
+          return
         } else {
-          toast.success('Başarılı', {
-            description: 'Şirket başarıyla güncellendi.'
-          })
+          // Promise toast kullan
+          toast.promise(
+            // 1 saniye gecikme ekle
+            new Promise(resolve => setTimeout(resolve, 1000)),
+            {
+              loading: 'Şirket güncelleniyor...',
+              success: 'Başarılı! Şirket başarıyla güncellendi.',
+              error: 'Bir hata oluştu.'
+            }
+          )
         }
       } else {
         // Yeni şirket oluştur
         // Backend'e sadece gerekli alanları gönderiyoruz
         // Backend'in beklediği format: { name: string, customerId: Guid | null }
         const createData = {
-          name: formData.name.trim(), // Boşlukları temizle
+          name: values.name.trim(), // Boşlukları temizle
           // Boş string yerine null gönderiyoruz
-          customerId: formData.customerId && formData.customerId.trim() !== '' ? formData.customerId : null
+          customerId: values.customerId && values.customerId.trim() !== '' ? values.customerId : null
         }
 
         // Hata ayıklama için verileri konsola yazdır
@@ -112,27 +151,47 @@ export function CompanyDialog({ open, onOpenChange, onClose, company }: CompanyD
         const response = await companyService.create(createData)
 
         if (response.error) {
-          throw new Error(response.error)
+          setError(response.error)
+          return
         } else {
-          toast.success('Başarılı', {
-            description: 'Şirket başarıyla oluşturuldu.'
-          })
+          // Promise toast kullan
+          toast.promise(
+            // 1 saniye gecikme ekle
+            new Promise(resolve => setTimeout(resolve, 1000)),
+            {
+              loading: 'Yeni şirket oluşturuluyor...',
+              success: 'Başarılı! Şirket başarıyla oluşturuldu.',
+              error: 'Bir hata oluştu.'
+            }
+          )
         }
       }
 
+      // Başarılı işlem sonrası dialog'u kapat
       onClose()
+      onOpenChange(false)
+
+      // Şirket ekleme veya güncelleme işlemine göre ilgili callback'i çağır
+      if (company) {
+        // Şirket güncellendi
+        if (onCompanyUpdated) {
+          onCompanyUpdated()
+        }
+      } else {
+        // Yeni şirket oluşturuldu
+        if (onCompanyCreated) {
+          onCompanyCreated()
+        }
+      }
     } catch (err) {
       console.error('Error saving company:', err)
       setError(err instanceof Error ? err.message : 'Bir hata oluştu')
-      toast.error('Hata', {
-        description: err instanceof Error ? err.message : 'Bir hata oluştu'
-      })
-    } finally {
-      setLoading(false)
     }
+
   }
 
   return (
+
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
@@ -141,60 +200,86 @@ export function CompanyDialog({ open, onOpenChange, onClose, company }: CompanyD
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Şirket Adı</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
-              required
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Şirket Adı</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Şirket adını girin" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Şirketin tam adını girin.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="customerId">Müşteri ID</Label>
-            <Input
-              id="customerId"
-              value={formData.customerId}
-              onChange={(e) =>
-                setFormData({ ...formData, customerId: e.target.value })
-              }
-              placeholder="Müşteri ID (opsiyonel)"
+            <FormField
+              control={form.control}
+              name="customerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Müşteri ID</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Müşteri ID (opsiyonel)" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Varsa müşteri ID'sini girin.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {/* Backend'de olmadığı için email, phone ve address alanlarını kaldırdık */}
-
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="isActive"
-              checked={formData.isActive}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, isActive: checked })
-              }
+            <FormField
+              control={form.control}
+              name="isActive"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Aktif</FormLabel>
+                    <FormDescription>
+                      Şirketin aktif olup olmadığını belirtin.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
             />
-            <Label htmlFor="isActive">Aktif</Label>
-          </div>
 
-          {error && <div className="text-red-500">{error}</div>}
+            {error && (
+              <div className="p-3 text-sm border border-red-200 rounded-md bg-red-50 text-red-600">
+                {error}
+              </div>
+            )}
 
-          <div className="flex justify-end space-x-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              İptal
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Kaydediliyor...' : 'Kaydet'}
-            </Button>
-          </div>
-        </form>
+            <div className="flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                İptal
+              </Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
+              </Button>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
+
   )
+
 }

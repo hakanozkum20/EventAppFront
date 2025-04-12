@@ -22,23 +22,22 @@ export class HttpClient {
       ...options?.headers,
     });
 
-    // Geçici olarak token kullanımını devre dışı bırakıyoruz
-    // if (options?.token) {
-    //   headers.append('Authorization', `Bearer ${options.token}`);
-    // }
+    if (options?.token) {
+      headers.append('Authorization', `Bearer ${options.token}`);
+    }
 
     return headers;
   }
 
   private buildUrl(endpoint: string, params?: Record<string, string>): string {
     const url = new URL(`${this.baseUrl}${endpoint}`);
-
+    
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         url.searchParams.append(key, value);
       });
     }
-
+    
     return url.toString();
   }
 
@@ -92,7 +91,24 @@ export class HttpClient {
   private async handleError(response: Response): Promise<Error> {
     try {
       const errorData = await response.json();
-      return new Error(errorData.error || `HTTP error ${response.status}`);
+      
+      // FluentValidation hata formatını kontrol et
+      if (errorData.errors && typeof errorData.errors === 'object') {
+        // Tüm validasyon hatalarını birleştir
+        const validationErrors = Object.entries(errorData.errors)
+          .map(([field, messages]) => {
+            if (Array.isArray(messages)) {
+              return `${field}: ${messages.join(', ')}`;
+            }
+            return `${field}: ${messages}`;
+          })
+          .join('\n');
+        
+        return new Error(validationErrors || errorData.title || 'Validation error');
+      }
+      
+      // Standart hata mesajı
+      return new Error(errorData.error || errorData.title || errorData.message || `HTTP error ${response.status}`);
     } catch (error) {
       return new Error(`HTTP error ${response.status}`);
     }
